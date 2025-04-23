@@ -2,6 +2,8 @@
 
 restore files from git repos
 
+inspired by :- https://medium.com/@sharon.brizinov/how-i-made-64k-from-deleted-files-a-bug-bounty-story-c5bd3a6f5f9b
+
 
 ### Install
 ```
