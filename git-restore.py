@@ -117,8 +117,8 @@ def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=N
                             with open(full_path, 'wb') as f:
                                 f.write(blob.data_stream.read())
                             console.print(f"[green][+][/green] {file_path} -> {full_path}")
-                        except (KeyError, GitCommandError):
-                            console.print(f"[red][!][/red] Failed to restore: {file_path}")
+                        except Exception as e:
+                            console.print(f"[red][!][/red] Skipped {file_path}: {e}")
             except GitCommandError:
                 continue
 
