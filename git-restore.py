@@ -29,7 +29,15 @@ def format_size(bytes_size):
     else:
         return f"{bytes_size} B"
 
-def list_deleted_files_visual(repo_dir, min_size=None, max_size=None):
+def get_excluded_extensions():
+    try:
+        with open("excluded_file_extensions.txt", "r") as f:
+            return set(line.strip().lower() for line in f if line.strip())
+    except FileNotFoundError:
+        return set()
+
+def list_deleted_files_visual(repo_dir, min_size=None, max_size=None, exclude_ext=False):
+    excluded_exts = get_excluded_extensions() if exclude_ext else set()
     repo = Repo(repo_dir)
     commits = list(repo.iter_commits('--all'))
     table = Table(title="Deleted Files", show_lines=True)
@@ -51,6 +59,8 @@ def list_deleted_files_visual(repo_dir, min_size=None, max_size=None):
                 for d in diff:
                     if d.change_type == 'D':
                         path = d.a_path
+                        if exclude_ext and os.path.splitext(path)[1].lower() in excluded_exts:
+                            continue
                         try:
                             blob = parent.tree / path
                             size_bytes = blob.size
@@ -65,7 +75,8 @@ def list_deleted_files_visual(repo_dir, min_size=None, max_size=None):
 
     console.print(table)
 
-def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=None):
+def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=None, exclude_ext=False):
+    excluded_exts = get_excluded_extensions() if exclude_ext else set()
     os.makedirs(output_dir, exist_ok=True)
     repo = Repo(repo_dir)
     commits = list(repo.iter_commits('--all'))
@@ -84,6 +95,8 @@ def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=N
                 for d in diff:
                     if d.change_type == 'D':
                         file_path = d.a_path
+                        if exclude_ext and os.path.splitext(file_path)[1].lower() in excluded_exts:
+                            continue
                         safe_name = file_path.replace('/', '_')
                         full_path = os.path.join(output_dir, f"{commit.hexsha}___{safe_name}")
                         try:
@@ -108,6 +121,7 @@ def main():
     parser.add_argument('--list-only', action='store_true', help='Only list deleted files, do not restore')
     parser.add_argument('--minsize', type=int, help='Minimum file size in bytes')
     parser.add_argument('--maxsize', type=int, help='Maximum file size in bytes')
+    parser.add_argument('--exclude-extensions', action='store_true', help='Exclude extensions listed in excluded_file_extensions.txt')
 
     args = parser.parse_args()
 
@@ -123,11 +137,11 @@ def main():
 
     if args.list_only:
         console.print(f"[bold green][i][/bold green] Listing deleted files with size info...")
-        list_deleted_files_visual(repo_path, args.minsize, args.maxsize)
+        list_deleted_files_visual(repo_path, args.minsize, args.maxsize, args.exclude_extensions)
     else:
         output_dir = args.output_dir or os.path.join("restored_repos", f"{repo_name}_restored")
         console.print(f"[bold green][i][/bold green] Restoring to [blue]{output_dir}[/blue]...")
-        restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize)
+        restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize, args.exclude_extensions)
 
     if args.repo_url:
         shutil.rmtree(repo_path, ignore_errors=True)
