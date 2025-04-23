@@ -12,7 +12,8 @@ pip install -r requirements.txt
 
 ### Usage
 ```
-usage: git-restore.py [-h] (--repo-url REPO_URL | --repo-path REPO_PATH) [--output-dir OUTPUT_DIR] [--list-only] [--minsize MINSIZE] [--maxsize MAXSIZE] [--exclude-extensions] [--scan-oldest-commits [1-100]]
+usage: git-restore.py [-h] (--repo-url REPO_URL | --repo-path REPO_PATH | --github-username GITHUB_USERNAME) [--output-dir OUTPUT_DIR] [--list-only] [--minsize MINSIZE] [--maxsize MAXSIZE]
+                      [--exclude-extensions] [--scan-oldest-commits [1-100]]
 
 List or restore deleted files from a Git repo with rich output.
 
@@ -21,6 +22,8 @@ options:
   --repo-url REPO_URL   GitHub repo URL
   --repo-path REPO_PATH
                         Path to a local Git repo
+  --github-username GITHUB_USERNAME
+                        GitHub username to fetch all public repos
   --output-dir OUTPUT_DIR
                         Directory to save restored files
   --list-only           Only list deleted files, do not restore
