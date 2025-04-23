@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import requests
 from urllib.parse import urlparse
 from git import Repo, GitCommandError
 from rich.progress import Progress
@@ -121,11 +122,22 @@ def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=N
             except GitCommandError:
                 continue
 
+def get_repos_from_github_user(username):
+    url = f"https://api.github.com/users/{username}/repos"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return [repo['clone_url'] for repo in resp.json() if not repo.get('fork')]
+    except Exception as e:
+        console.print(f"[red][!][/red] Failed to fetch repos for user {username}: {e}")
+        return []
+
 def main():
     parser = argparse.ArgumentParser(description='List or restore deleted files from a Git repo with rich output.')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--repo-url', help='GitHub repo URL')
     group.add_argument('--repo-path', help='Path to a local Git repo')
+    group.add_argument('--github-username', help='GitHub username to fetch all public repos')
     parser.add_argument('--output-dir', help='Directory to save restored files')
     parser.add_argument('--list-only', action='store_true', help='Only list deleted files, do not restore')
     parser.add_argument('--minsize', type=int, help='Minimum file size in bytes')
@@ -135,27 +147,41 @@ def main():
 
     args = parser.parse_args()
 
-    if args.repo_url:
-        repo_name = extract_repo_name(args.repo_url)
-        repo_path = repo_name
-        console.print(f"[bold green][i][/bold green] Cloning [yellow]{args.repo_url}[/yellow] into [blue]{repo_path}[/blue]...")
-        clone_repo(args.repo_url, repo_path)
+    repo_urls = []
+    if args.github_username:
+        repo_urls = get_repos_from_github_user(args.github_username)
+    elif args.repo_url:
+        repo_urls = [args.repo_url]
+
+    if repo_urls:
+        for repo_url in repo_urls:
+            repo_name = extract_repo_name(repo_url)
+            repo_path = repo_name
+            console.print(f"[bold green][i][/bold green] Cloning [yellow]{repo_url}[/yellow] into [blue]{repo_path}[/blue]...")
+            clone_repo(repo_url, repo_path)
+
+            if args.list_only:
+                console.print(f"[bold green][i][/bold green] Listing deleted files with size info...")
+                list_deleted_files_visual(repo_path, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
+            else:
+                output_dir = args.output_dir or os.path.join("restored_repos", f"{repo_name}_restored")
+                console.print(f"[bold green][i][/bold green] Restoring to [blue]{output_dir}[/blue]...")
+                restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
+
+            shutil.rmtree(repo_path, ignore_errors=True)
+            console.print(f"[bold green][i][/bold green] Removed cloned repo [blue]{repo_path}[/blue]")
     else:
         repo_path = args.repo_path
         repo_name = extract_repo_name(repo_path)
         console.print(f"[bold green][i][/bold green] Using local repo at [blue]{repo_path}[/blue]...")
 
-    if args.list_only:
-        console.print(f"[bold green][i][/bold green] Listing deleted files with size info...")
-        list_deleted_files_visual(repo_path, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
-    else:
-        output_dir = args.output_dir or os.path.join("restored_repos", f"{repo_name}_restored")
-        console.print(f"[bold green][i][/bold green] Restoring to [blue]{output_dir}[/blue]...")
-        restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
-
-    if args.repo_url:
-        shutil.rmtree(repo_path, ignore_errors=True)
-        console.print(f"[bold green][i][/bold green] Removed cloned repo [blue]{repo_path}[/blue]")
+        if args.list_only:
+            console.print(f"[bold green][i][/bold green] Listing deleted files with size info...")
+            list_deleted_files_visual(repo_path, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
+        else:
+            output_dir = args.output_dir or os.path.join("restored_repos", f"{repo_name}_restored")
+            console.print(f"[bold green][i][/bold green] Restoring to [blue]{output_dir}[/blue]...")
+            restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
 
     console.print("[bold green][✓] Done.[/bold green]")
 
