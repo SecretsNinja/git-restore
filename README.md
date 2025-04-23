@@ -10,7 +10,7 @@ pip install -r requirements.txt
 
 ### Usage
 ```
-usage: git-restore.py [-h] (--repo-url REPO_URL | --repo-path REPO_PATH) [--output-dir OUTPUT_DIR] [--list-only]
+usage: git-restore.py [-h] (--repo-url REPO_URL | --repo-path REPO_PATH) [--output-dir OUTPUT_DIR] [--list-only] [--minsize MINSIZE] [--maxsize MAXSIZE]
 
 List or restore deleted files from a Git repo with rich output.
 
@@ -22,4 +22,6 @@ options:
   --output-dir OUTPUT_DIR
                         Directory to save restored files
   --list-only           Only list deleted files, do not restore
+  --minsize MINSIZE     Minimum file size in bytes
+  --maxsize MAXSIZE     Maximum file size in bytes
 ```
