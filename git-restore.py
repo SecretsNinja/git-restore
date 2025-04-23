@@ -36,10 +36,15 @@ def get_excluded_extensions():
     except FileNotFoundError:
         return set()
 
-def list_deleted_files_visual(repo_dir, min_size=None, max_size=None, exclude_ext=False):
+def list_deleted_files_visual(repo_dir, min_size=None, max_size=None, exclude_ext=False, scan_percent=None):
     excluded_exts = get_excluded_extensions() if exclude_ext else set()
     repo = Repo(repo_dir)
     commits = list(repo.iter_commits('--all'))
+    if scan_percent:
+        commits = sorted(commits, key=lambda c: c.committed_datetime)
+        cutoff = max(1, int(len(commits) * (scan_percent / 100)))
+        commits = commits[:cutoff]
+
     table = Table(title="Deleted Files", show_lines=True)
     table.add_column("Commit", style="bold cyan", width=10)
     table.add_column("File Path", style="yellow")
@@ -75,11 +80,15 @@ def list_deleted_files_visual(repo_dir, min_size=None, max_size=None, exclude_ex
 
     console.print(table)
 
-def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=None, exclude_ext=False):
+def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=None, exclude_ext=False, scan_percent=None):
     excluded_exts = get_excluded_extensions() if exclude_ext else set()
     os.makedirs(output_dir, exist_ok=True)
     repo = Repo(repo_dir)
     commits = list(repo.iter_commits('--all'))
+    if scan_percent:
+        commits = sorted(commits, key=lambda c: c.committed_datetime)
+        cutoff = max(1, int(len(commits) * (scan_percent / 100)))
+        commits = commits[:cutoff]
 
     with Progress() as progress:
         task = progress.add_task("[cyan]Restoring files...", total=len(commits))
@@ -122,6 +131,7 @@ def main():
     parser.add_argument('--minsize', type=int, help='Minimum file size in bytes')
     parser.add_argument('--maxsize', type=int, help='Maximum file size in bytes')
     parser.add_argument('--exclude-extensions', action='store_true', help='Exclude extensions listed in excluded_file_extensions.txt')
+    parser.add_argument('--scan-oldest-commits', type=int, choices=range(1, 101), metavar='[1-100]', help='Only scan oldest X%% of commits')
 
     args = parser.parse_args()
 
@@ -137,11 +147,11 @@ def main():
 
     if args.list_only:
         console.print(f"[bold green][i][/bold green] Listing deleted files with size info...")
-        list_deleted_files_visual(repo_path, args.minsize, args.maxsize, args.exclude_extensions)
+        list_deleted_files_visual(repo_path, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
     else:
         output_dir = args.output_dir or os.path.join("restored_repos", f"{repo_name}_restored")
         console.print(f"[bold green][i][/bold green] Restoring to [blue]{output_dir}[/blue]...")
-        restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize, args.exclude_extensions)
+        restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize, args.exclude_extensions, args.scan_oldest_commits)
 
     if args.repo_url:
         shutil.rmtree(repo_path, ignore_errors=True)
