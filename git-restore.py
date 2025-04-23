@@ -19,13 +19,23 @@ def clone_repo(repo_url, dest_dir):
         shutil.rmtree(dest_dir)
     return Repo.clone_from(repo_url, dest_dir)
 
-def list_deleted_files_visual(repo_dir):
+def format_size(bytes_size):
+    if bytes_size >= 1024 ** 3:
+        return f"{bytes_size / (1024 ** 3):.2f} GB"
+    elif bytes_size >= 1024 ** 2:
+        return f"{bytes_size / (1024 ** 2):.2f} MB"
+    elif bytes_size >= 1024:
+        return f"{bytes_size / 1024:.2f} KB"
+    else:
+        return f"{bytes_size} B"
+
+def list_deleted_files_visual(repo_dir, min_size=None, max_size=None):
     repo = Repo(repo_dir)
     commits = list(repo.iter_commits('--all'))
     table = Table(title="Deleted Files", show_lines=True)
     table.add_column("Commit", style="bold cyan", width=10)
     table.add_column("File Path", style="yellow")
-    table.add_column("Size (KB)", justify="right")
+    table.add_column("Size", justify="right")
 
     with Progress() as progress:
         task = progress.add_task("[cyan]Scanning commits...", total=len(commits))
@@ -43,16 +53,19 @@ def list_deleted_files_visual(repo_dir):
                         path = d.a_path
                         try:
                             blob = parent.tree / path
-                            size_kb = f"{blob.size / 1024:.2f}"
+                            size_bytes = blob.size
+                            if (min_size and size_bytes < min_size) or (max_size and size_bytes > max_size):
+                                continue
+                            size_str = format_size(size_bytes)
                         except Exception:
-                            size_kb = "?"
-                        table.add_row(commit.hexsha[:7], path, size_kb)
+                            size_str = "?"
+                        table.add_row(commit.hexsha[:7], path, size_str)
             except GitCommandError:
                 continue
 
     console.print(table)
 
-def restore_deleted_files_visual(repo_dir, output_dir):
+def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=None):
     os.makedirs(output_dir, exist_ok=True)
     repo = Repo(repo_dir)
     commits = list(repo.iter_commits('--all'))
@@ -75,6 +88,9 @@ def restore_deleted_files_visual(repo_dir, output_dir):
                         full_path = os.path.join(output_dir, f"{commit.hexsha}___{safe_name}")
                         try:
                             blob = parent.tree / file_path
+                            size_bytes = blob.size
+                            if (min_size and size_bytes < min_size) or (max_size and size_bytes > max_size):
+                                continue
                             with open(full_path, 'wb') as f:
                                 f.write(blob.data_stream.read())
                             console.print(f"[green][+][/green] {file_path} -> {full_path}")
@@ -90,6 +106,8 @@ def main():
     group.add_argument('--repo-path', help='Path to a local Git repo')
     parser.add_argument('--output-dir', help='Directory to save restored files')
     parser.add_argument('--list-only', action='store_true', help='Only list deleted files, do not restore')
+    parser.add_argument('--minsize', type=int, help='Minimum file size in bytes')
+    parser.add_argument('--maxsize', type=int, help='Maximum file size in bytes')
 
     args = parser.parse_args()
 
@@ -105,12 +123,12 @@ def main():
 
     if args.list_only:
         console.print(f"[bold green][i][/bold green] Listing deleted files with size info...")
-        list_deleted_files_visual(repo_path)
+        list_deleted_files_visual(repo_path, args.minsize, args.maxsize)
     else:
         output_dir = args.output_dir or os.path.join("restored_repos", f"{repo_name}_restored")
         console.print(f"[bold green][i][/bold green] Restoring to [blue]{output_dir}[/blue]...")
-        restore_deleted_files_visual(repo_path, output_dir)
-        
+        restore_deleted_files_visual(repo_path, output_dir, args.minsize, args.maxsize)
+
     if args.repo_url:
         shutil.rmtree(repo_path, ignore_errors=True)
         console.print(f"[bold green][i][/bold green] Removed cloned repo [blue]{repo_path}[/blue]")
