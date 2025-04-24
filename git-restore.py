@@ -122,10 +122,14 @@ def restore_deleted_files_visual(repo_dir, output_dir, min_size=None, max_size=N
             except GitCommandError:
                 continue
 
-def get_repos_from_github_user(username):
+def get_repos_from_github_user(username, gh_token=None):
+    headers = {}
+    if gh_token:
+        headers['Authorization'] = f'token {gh_token}'
     url = f"https://api.github.com/users/{username}/repos"
+    print(headers)
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         return [repo['clone_url'] for repo in resp.json() if not repo.get('fork')]
     except Exception as e:
@@ -138,6 +142,7 @@ def main():
     group.add_argument('--repo-url', help='GitHub repo URL')
     group.add_argument('--repo-path', help='Path to a local Git repo')
     group.add_argument('--github-username', help='GitHub username to fetch all public repos')
+    parser.add_argument('--github-token', help='Github Token for higher rate limits')
     parser.add_argument('--output-dir', help='Directory to save restored files')
     parser.add_argument('--list-only', action='store_true', help='Only list deleted files, do not restore')
     parser.add_argument('--minsize', type=int, help='Minimum file size in bytes')
@@ -149,7 +154,7 @@ def main():
 
     repo_urls = []
     if args.github_username:
-        repo_urls = get_repos_from_github_user(args.github_username)
+        repo_urls = get_repos_from_github_user(args.github_username, gh_token=args.github_token)
     elif args.repo_url:
         repo_urls = [args.repo_url]
 
